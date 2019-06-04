@@ -1,5 +1,5 @@
 resnet(){
-PRETRAINED_RESNET=/home/pengjun/sda4/ycq/pretrained/resnet_56_9367.pt
+PRETRAINED_RESNET=[pre-trained model dir]
 MIU=1
 LAMBDA=0.6
 python main.py \
@@ -10,7 +10,7 @@ python main.py \
 }
 
 vgg(){
-PRETRAINED_VGG=/home/pengjun/sda4/ycq/pretrained/vgg_16_bn.pt
+PRETRAINED_VGG=[pre-trained model dir]
 MIU=1e-1
 LAMBDA=1e-3
 python main.py \
@@ -21,7 +21,7 @@ python main.py \
 } 
 
 googlenet(){
-PRETRAINED_GOOGLENET=/home/pengjun/sda4/ycq/pretrained/googlenet_1.pt
+PRETRAINED_GOOGLENET=[pre-trained model dir]
 MIU=1e-1
 LAMBDA=1e-2
 PRINT=200
@@ -34,7 +34,7 @@ python main.py \
 } 
 
 densenet(){
-PRETRAINED_DENSENET=/home/pengjun/sda4/ycq/pretrained/densenet_40.pth.tar
+PRETRAINED_DENSENET=[pre-trained model dir]
 MIU=1e-1
 LAMBDA=1e-2
 python main.py \
