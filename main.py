@@ -1,8 +1,9 @@
 import os
+import numpy as np
 import utils.common as utils
 from utils.options import args
-from utils.preprocess import prune_resnet
 from tensorboardX import SummaryWriter
+from importlib import import_module
 
 import torch
 import torch.nn as nn
@@ -11,13 +12,18 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import StepLR
 
 from fista import FISTA
-from model import Discriminator, resnet_56, resnet_56_sparse
+from model import Discriminator
+
 from data import cifar10
+import pdb 
+
+device = torch.device(f"cuda:{args.gpus[0]}")
+checkpoint = utils.checkpoint(args)
+print_logger = utils.get_logger(os.path.join(args.job_dir, "logger.log"))
+writer_train = SummaryWriter(args.job_dir + '/run/train')
+writer_test = SummaryWriter(args.job_dir + '/run/test')
 
 def main():
-    checkpoint = utils.checkpoint(args)
-    writer_train = SummaryWriter(args.job_dir + '/run/train')
-    writer_test = SummaryWriter(args.job_dir + '/run/test')
 
     start_epoch = 0
     best_prec1 = 0.0
@@ -29,18 +35,32 @@ def main():
 
     # Create model
     print('=> Building model...')
-    model_t = resnet_56().to(args.gpus[0])
+    model_t = import_module(f'model.{args.arch}').__dict__[args.teacher_model]().to(device)
 
     # Load teacher model
-    ckpt_t = torch.load(args.teacher_dir, map_location=torch.device(f"cuda:{args.gpus[0]}"))
-    state_dict_t = ckpt_t['state_dict']
+    ckpt_t = torch.load(args.teacher_dir, map_location=device)
+    
+
+    if args.arch == 'densenet':
+        state_dict_t = {}
+        for k, v in ckpt_t['state_dict'].items():
+            new_key = '.'.join(k.split('.')[1:])
+            if new_key == 'linear.weight':
+                new_key = 'fc.weight'
+            elif new_key == 'linear.bias':
+                new_key = 'fc.bias'
+            state_dict_t[new_key] = v
+    else:
+        state_dict_t = ckpt_t['state_dict']
+
+
     model_t.load_state_dict(state_dict_t)
-    model_t = model_t.to(args.gpus[0])
+    model_t = model_t.to(device)
 
     for para in list(model_t.parameters())[:-2]:
         para.requires_grad = False
 
-    model_s = resnet_56_sparse().to(args.gpus[0])
+    model_s = import_module(f'model.{args.arch}').__dict__[args.student_model]().to(device)
 
     model_dict_s = model_s.state_dict()
     model_dict_s.update(state_dict_t)
@@ -49,7 +69,7 @@ def main():
     if len(args.gpus) != 1:
         model_s = nn.DataParallel(model_s, device_ids=args.gpus)
 
-    model_d = Discriminator().to(args.gpus[0]) 
+    model_d = Discriminator().to(device) 
 
     models = [model_t, model_s, model_d]
 
@@ -68,10 +88,11 @@ def main():
     resume = args.resume
     if resume:
         print('=> Resuming from ckpt {}'.format(resume))
-        ckpt = torch.load(resume, map_location=torch.device(f"cuda:{args.gpus[0]}"))
+        ckpt = torch.load(resume, map_location=device)
         best_prec1 = ckpt['best_prec1']
         start_epoch = ckpt['epoch']
-        model_s.load_state_dict(ckpt['state_dict_s'])
+
+        model_s.load_state_dict(ckpt['            state_dict_s'])
         model_d.load_state_dict(ckpt['state_dict_d'])
         optimizer_d.load_state_dict(ckpt['optimizer_d'])
         optimizer_s.load_state_dict(ckpt['optimizer_s'])
@@ -81,19 +102,19 @@ def main():
         scheduler_m.load_state_dict(ckpt['scheduler_m'])
         print('=> Continue from epoch {}...'.format(start_epoch))
 
-    optimizers = [optimizer_d, optimizer_s, optimizer_m]
-    schedulers = [scheduler_d, scheduler_s, scheduler_m]
 
     if args.test_only:
         test_prec1, test_prec5 = test(args, loader.loader_test, model_s)
         print('=> Test Prec@1: {:.2f}'.format(test_prec1))
         return
 
+    optimizers = [optimizer_d, optimizer_s, optimizer_m]
+    schedulers = [scheduler_d, scheduler_s, scheduler_m]
     for epoch in range(start_epoch, args.num_epochs):
         for s in schedulers:
             s.step(epoch)
 
-        train(args, loader.loader_train, models, optimizers, epoch, writer_train)
+        train(args, loader.loader_train, models, optimizers, epoch)
         test_prec1, test_prec5 = test(args, loader.loader_test, model_s)
 
         is_best = best_prec1 < test_prec1
@@ -117,14 +138,13 @@ def main():
         }
         checkpoint.save_model(state, epoch + 1, is_best)
 
-    print(f"=> Best @prec1: {best_prec1:.3f} @prec5: {best_prec5:.3f}")
+    print_logger.info(f"Best @prec1: {best_prec1:.3f} @prec5: {best_prec5:.3f}")
 
-    best_model = torch.load(f'{args.job_dir}/checkpoint/model_best.pt', map_location=torch.device(f"cuda:{args.gpus[0]}"))
+    best_model = torch.load(f'{args.job_dir}/checkpoint/model_best.pt', map_location=device)
 
-    model = prune_resnet(args, best_model['state_dict_s'])
-    
+    model = import_module('utils.preprocess').__dict__[f'{args.arch}'](args, best_model['state_dict_s'])
 
-def train(args, loader_train, models, optimizers, epoch, writer_train):
+def train(args, loader_train, models, optimizers, epoch):
     losses_d = utils.AverageMeter()
     losses_data = utils.AverageMeter()
     losses_g = utils.AverageMeter()
@@ -154,8 +174,8 @@ def train(args, loader_train, models, optimizers, epoch, writer_train):
     for i, (inputs, targets) in enumerate(loader_train, 1):
         num_iters = num_iterations * epoch + i
 
-        inputs = inputs.to(args.gpus[0])
-        targets = targets.to(args.gpus[0])
+        inputs = inputs.to(device)
+        targets = targets.to(device)
 
         features_t = model_t(inputs)
         features_s = model_s(inputs)
@@ -170,32 +190,27 @@ def train(args, loader_train, models, optimizers, epoch, writer_train):
         optimizer_d.zero_grad()
 
         output_t = model_d(features_t.detach())
-        
-        labels_real = torch.full_like(output_t, real_label, device=args.gpus[0])
+        # print('output_t',output_t)
+        labels_real = torch.full_like(output_t, real_label, device=device)
         error_real = bce_logits(output_t, labels_real)
 
-        output_s = model_d(features_s.to(args.gpus[0]).detach())
-
-        labels_fake = torch.full_like(output_t, fake_label, device=args.gpus[0])
+        output_s = model_d(features_s.to(device).detach())
+        # print('output_s',output_t)
+        labels_fake = torch.full_like(output_s, fake_label, device=device)
         error_fake = bce_logits(output_s, labels_fake)
 
         error_d = error_real + error_fake
 
-        labels = torch.full_like(output_s, real_label, device=args.gpus[0])
+        labels = torch.full_like(output_s, real_label, device=device)
         error_d += bce_logits(output_s, labels)
 
         error_d.backward()
         losses_d.update(error_d.item(), inputs.size(0))
+
         writer_train.add_scalar(
             'discriminator_loss', error_d.item(), num_iters)
 
         optimizer_d.step()
-        
-        if i % args.print_freq == 0:
-            print(
-                '=> D_Epoch[{0}]({1}/{2}):\t'
-                'Loss_d {loss_d.val:.4f} ({loss_d.avg:.4f})\t'.format(
-                epoch, i, num_iterations, loss_d=losses_d))
 
         ############################
         # (2) Update student network
@@ -207,7 +222,7 @@ def train(args, loader_train, models, optimizers, epoch, writer_train):
         optimizer_s.zero_grad()
         optimizer_m.zero_grad()
 
-        error_data = args.miu * F.mse_loss(features_t, features_s.to(args.gpus[0]))
+        error_data = args.miu * F.mse_loss(features_t, features_s.to(device))
 
         losses_data.update(error_data.item(), inputs.size(0))
         writer_train.add_scalar(
@@ -215,10 +230,11 @@ def train(args, loader_train, models, optimizers, epoch, writer_train):
         error_data.backward(retain_graph=True)
 
         # fool discriminator
-        output_s = model_d(features_s.to(args.gpus[0]))
+        output_s = model_d(features_s.to(device))
         
-        labels = torch.full_like(output_s, real_label, device=args.gpus[0])
+        labels = torch.full_like(output_s, real_label, device=device)
         error_g = bce_logits(output_s, labels)
+
         losses_g.update(error_g.item(), inputs.size(0))
         writer_train.add_scalar(
             'generator_loss', error_g.item(), num_iters)
@@ -230,7 +246,7 @@ def train(args, loader_train, models, optimizers, epoch, writer_train):
             if 'mask' in name:
                 mask.append(param.view(-1))
         mask = torch.cat(mask)
-        error_sparse = args.sparse_lambda * F.l1_loss(mask, torch.zeros(mask.size()).to(args.gpus[0]), reduction='sum')
+        error_sparse = args.sparse_lambda * torch.norm(mask, 1)
         error_sparse.backward()
 
         losses_sparse.update(error_sparse.item(), inputs.size(0))
@@ -243,13 +259,13 @@ def train(args, loader_train, models, optimizers, epoch, writer_train):
         if i % args.mask_step == 0:
             optimizer_m.step(decay)
 
-        prec1, prec5 = utils.accuracy(features_s.to(args.gpus[0]), targets.to(args.gpus[0]), topk=(1, 5))
+        prec1, prec5 = utils.accuracy(features_s, targets, topk=(1, 5))
         top1.update(prec1[0], inputs.size(0))
         top5.update(prec5[0], inputs.size(0))
 
         if i % args.print_freq == 0:
-            print(
-                '=> G_Epoch[{0}]({1}/{2}):\t'
+            print_logger.info(
+                'Epoch[{0}]({1}/{2}):\t'
                 'Loss_sparse {loss_sparse.val:.4f} ({loss_sparse.avg:.4f})\t'
                 'Loss_data {loss_data.val:.4f} ({loss_data.avg:.4f})\t'
                 'Loss_d {loss_d.val:.4f} ({loss_d.avg:.4f})\t'
@@ -257,6 +273,19 @@ def train(args, loader_train, models, optimizers, epoch, writer_train):
                 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                 epoch, i, num_iterations, loss_sparse=losses_sparse, loss_data=losses_data, loss_g=losses_g, loss_d=losses_d, top1=top1, top5=top5))
+            
+            mask = []
+            pruned = 0
+            num = 0
+            
+            for name, param in model_s.named_parameters():
+                if 'mask' in name:
+                    weight_copy = param.clone()
+                    param_array = np.array(weight_copy.detach().cpu())
+                    pruned += sum(w == 0 for w in param_array)
+                    num += len(param_array)
+                    
+            print_logger.info("Pruned {} / {}".format(pruned, num))
 
 def test(args, loader_test, model_s):
     losses = utils.AverageMeter()
@@ -271,10 +300,10 @@ def test(args, loader_test, model_s):
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(loader_test, 1):
             
-            inputs = inputs.to(args.gpus[0])
-            targets = targets.to(args.gpus[0])
+            inputs = inputs.to(device)
+            targets = targets.to(device)
 
-            logits = model_s(inputs).to(args.gpus[0])
+            logits = model_s(inputs).to(device)
             loss = cross_entropy(logits, targets)
 
             prec1, prec5 = utils.accuracy(logits, targets, topk=(1, 5))
@@ -282,16 +311,8 @@ def test(args, loader_test, model_s):
             top1.update(prec1[0], inputs.size(0))
             top5.update(prec5[0], inputs.size(0))
         
-            
-        print('* Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
+        print_logger.info('Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
         .format(top1=top1, top5=top5))
-
-        mask = []
-        for name, weight in model_s.named_parameters():
-            if 'mask' in name:
-                mask.append(weight.item())
-            
-        print("* Pruned {} / {}".format(sum(m == 0 for m in mask), len(mask)))
 
     return top1.avg, top5.avg
     

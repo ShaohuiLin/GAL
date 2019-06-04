@@ -6,17 +6,18 @@ from torch.autograd import Variable
 class Discriminator(nn.Module):
     def __init__(self, num_classes=10):
         super(Discriminator, self).__init__()
-        self.filters = [num_classes, 128, 256, 128]
+        self.filters = [num_classes, 128, 256, 128, 1]
         block = [
             nn.Linear(self.filters[i], self.filters[i+1]) \
-            for i in range(3)
+            for i in range(4)
         ]
+        
         self.body = nn.Sequential(*block)
-
         self._initialize_weights()
 
     def forward(self, input):
         x = self.body(input)
+        x = torch.sigmoid(x)
         return x
 
     def _initialize_weights(self):

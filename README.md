@@ -32,7 +32,7 @@ If you find GAL useful in your research, please consider citing:
 
 ## Running Code
 
-In this code, you can run our Resnet-56 model on CIFAR10 dataset. The code has been tested by Python 3.6, [Pytorch 0.4.1](https://pytorch.org/) and CUDA 9.0 on Ubuntu 16.04.
+In this code, you can run our models on CIFAR10 dataset. The code has been tested by Python 3.6, [Pytorch 0.4.1](https://pytorch.org/) and CUDA 9.0 on Ubuntu 16.04.
 
 
 
@@ -49,26 +49,38 @@ sh run.sh
 **For training**, change the `teacher_dir` to the place where the pretrained model is located. 
 
 ```shell
-# run.sh
-python main.py --teacher_dir [pre-trained model dir]
+# ResNet-56
+MIU=1
+LAMBDA=0.8
+python main.py \
+--teacher_dir [pre-trained model dir] \
+--arch resnet --teacher_model resnet_56 --student_model resnet_56_sparse \
+--lambda $LAMBDA --miu $MIU \
+--job_dir 'experiment/resnet/lambda_'$LAMBDA'_miu_'$MIU
 ```
 
-The pruned model will be named `pruned.pt`
+After training, checkpoints and loggers can be found in the `job_dir`, The pruned model of best performance will be named `[arch]_pruned_[pruned_num].pt`. For example: `resnet_pruned_11.pt`
 
 
 
 **For fine-tuning**, change the `refine` to the place where the pruned model is allowed to be fine-tuned. 
 
 ```shell
-# run.sh
-python finetune.py --refine [pruned model dir] 
+# ResNet-56
+python finetune.py \
+--arch resnet --lr 1e-4 \
+--refine experiment/resnet/lambda_0.8_miu_1/resnet_pruned_11.pt \
+--job_dir experiment/resnet/ft_lambda_0.8_miu_1/ \
+--pruned 
 ```
 
-You can set `--pruned` to reuse the `pruned.pt`. If you want to initiate weights randomly, just set  `--random`.
+You can set `--pruned` to reuse the pruned model. 
 
 
 
-We also provide our [baseline](https://drive.google.com/open?id=1XHNxyFklGjvzNpTjzlkjpKc61-LLjt5T) model. Enjoy your training and testing!
+We also provide our baseline models below. Enjoy your training and testing!
+
+| [ResNet56](https://drive.google.com/open?id=1XHNxyFklGjvzNpTjzlkjpKc61-LLjt5T) | [Vgg-16](https://drive.google.com/open?id=1pnMmLEWAUjVfqFUHanFlps6fSu10UYc1) | [DenseNet-40](https://drive.google.com/open?id=1Ev0SH14lWB5QuyPWLbbUEwGhVJ68tPkb) | [GoogleNet](https://drive.google.com/open?id=1tLZHnycQc4oAJhZ4JNYET_xHwR9mcdZX) |
 
 
 

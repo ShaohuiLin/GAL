@@ -1,5 +1,64 @@
-# Training
-# CUDA_VISIBLE_DEVICES=0 python main.py --teacher_dir [pre-trained model dir]
+resnet(){
+PRETRAINED_RESNET=/home/pengjun/sda4/ycq/pretrained/resnet_56_9367.pt
+MIU=1
+LAMBDA=0.6
+python main.py \
+--teacher_dir $PRETRAINED_RESNET \
+--arch resnet --teacher_model resnet_56 --student_model resnet_56_sparse \
+--lambda $LAMBDA --miu $MIU \
+--job_dir 'experiment/resnet/lambda_'$LAMBDA'_miu_'$MIU
+}
 
+vgg(){
+PRETRAINED_VGG=/home/pengjun/sda4/ycq/pretrained/vgg_16_bn.pt
+MIU=1e-1
+LAMBDA=1e-3
+python main.py \
+--teacher_dir $PRETRAINED_VGG \
+--arch vgg --teacher_model vgg_16_bn --student_model vgg_16_bn_sparse \
+--lambda $LAMBDA --miu $MIU \
+--job_dir 'experiment/vgg/lambda_'$LAMBDA'_miu_'$MIU 
+} 
+
+googlenet(){
+PRETRAINED_GOOGLENET=/home/pengjun/sda4/ycq/pretrained/googlenet_1.pt
+MIU=1e-1
+LAMBDA=1e-2
+PRINT=200
+python main.py \
+--teacher_dir $PRETRAINED_GOOGLENET \
+--arch googlenet --teacher_model googlenet --student_model googlenet_sparse \
+--lambda $LAMBDA --miu $MIU  \
+--job_dir 'experiment/googlenet/lambda_'$LAMBDA'_miu_'$MIU \
+--train_batch_size 64 --gpus 1
+} 
+
+densenet(){
+PRETRAINED_DENSENET=/home/pengjun/sda4/ycq/pretrained/densenet_40.pth.tar
+MIU=1e-1
+LAMBDA=1e-2
+python main.py \
+--teacher_dir $PRETRAINED_DENSENET \
+--arch densenet --teacher_model densenet_40 --student_model densenet_40_sparse \
+--lambda $LAMBDA --miu $MIU \
+--job_dir 'experiment/densenet/lambda_'$LAMBDA'_miu_'$MIU \
+--train_batch_size 64 --gpus 2 
+} 
+
+finetune(){
+ARCH=resnet
+python finetune.py \
+--arch $ARCH --lr 1e-5 \
+--refine experiment/$ARCH/lambda_0.8_miu_1/resnet_pruned_11.pt \
+--job_dir experiment/$ARCH/ft_lambda_0.8_miu_1_lr_1e-5/ \
+--pruned 
+}
+
+
+# Training
+# vgg;
+resnet;
+# googlenet;
+# densenet;
 # Fine-tuning
-# CUDA_VISIBLE_DEVICES=0 python finetune.py --refine [pruned model dir]
+# finetune;

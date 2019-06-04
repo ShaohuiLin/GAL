@@ -14,16 +14,19 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from utils.options import args
-from utils.preprocess import prune_resnet
-from model import resnet_56_sparse
+import pdb
+from model import *
+
+device = torch.device(f"cuda:{args.gpus[0]}")
+ckpt = utils.checkpoint(args)
+print_logger = utils.get_logger(os.path.join(args.job_dir, "logger.log"))
+writer_train = SummaryWriter(args.job_dir + '/run/train')
+writer_test = SummaryWriter(args.job_dir + '/run/test')
 
 def main():
     start_epoch = 0
     best_prec1, best_prec5 = 0.0, 0.0
 
-    ckpt = utils.checkpoint(args)
-    writer_train = SummaryWriter(args.job_dir + '/run/train')
-    writer_test = SummaryWriter(args.job_dir + '/run/test')
 
     # Data loading
     print('=> Preparing data..')
@@ -36,19 +39,32 @@ def main():
     # Fine tune from a checkpoint
     refine = args.refine
     assert refine is not None, 'refine is required'
-    checkpoint = torch.load(refine, map_location=torch.device(f"cuda:{args.gpus[0]}"))
+    checkpoint = torch.load(refine, map_location=device)
         
     if args.pruned:
-        mask = checkpoint['mask']
-        pruned = sum([1 for m in mask if mask == 0])
-        print(f"Pruned / Total: {pruned} / {len(mask)}")
-        model = resnet_56_sparse(has_mask = mask).to(args.gpus[0])
-        model.load_state_dict(checkpoint['state_dict_s'])
-    else:
-        model = prune_resnet(args, checkpoint['state_dict_s'])
+        state_dict = checkpoint['state_dict_s']
+        if args.arch == 'vgg':
+            cfg = checkpoint['cfg']
+            model = vgg_16_bn_sparse(cfg = cfg).to(device)
+        # pruned = sum([1 for m in mask if mask == 0])
+        # print(f"Pruned / Total: {pruned} / {len(mask)}")
+        elif args.arch =='resnet':
+            mask = checkpoint['mask']
+            model = resnet_56_sparse(has_mask = mask).to(device)
 
+        elif args.arch == 'densenet':
+            filters = checkpoint['filters']
+            indexes = checkpoint['indexes']
+            model = densenet_40_sparse(filters = filters, indexes = indexes).to(device)
+        elif args.arch =='googlenet':
+            mask = checkpoint['mask']
+            model = googlenet_sparse(has_mask = mask).to(device)
+        model.load_state_dict(state_dict)
+    else:
+        model = import_module('utils.preprocess').__dict__[f'{args.arch}'](args, checkpoint['state_dict_s'])
+
+    print_logger.info(f"Simply test after pruning...")
     test_prec1, test_prec5 = test(args, loader.loader_test, model, criterion, writer_test)
-    print(f"Simply test after prune {test_prec1:.3f}")
     
     if args.test_only:
         return 
@@ -66,7 +82,7 @@ def main():
     resume = args.resume
     if resume:
         print('=> Loading checkpoint {}'.format(resume))
-        checkpoint = torch.load(resume, map_location=torch.device(f"cuda:{args.gpus[0]}"))
+        checkpoint = torch.load(resume, map_location=device)
         start_epoch = checkpoint['epoch']
         best_prec1 = checkpoint['best_prec1']
         model.load_state_dict(checkpoint['state_dict'])
@@ -74,7 +90,6 @@ def main():
         scheduler.load_state_dict(checkpoint['scheduler'])
         print('=> Continue from epoch {}...'.format(start_epoch))
 
-  
 
     for epoch in range(start_epoch, args.num_epochs):
         scheduler.step(epoch)
@@ -97,7 +112,7 @@ def main():
 
         ckpt.save_model(state, epoch + 1, is_best)
 
-    print(f"=> Best @prec1: {best_prec1:.3f} @prec5: {best_prec5:.3f}")
+    print_logger.info(f"=> Best @prec1: {best_prec1:.3f} @prec5: {best_prec5:.3f}")
 
 def train(args, loader_train, model, criterion, optimizer, writer_train, epoch):
     losses = utils.AverageMeter()
@@ -134,12 +149,11 @@ def test(args, loader_test, model, criterion, writer_test, epoch=0):
     model.eval()
     num_iterations = len(loader_test)
 
-    print("=> Evaluating...")
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(loader_test, 1):
 
-            inputs = inputs.to(args.gpus[0])
-            targets = targets.to(args.gpus[0])
+            inputs = inputs.to(device)
+            targets = targets.to(device)
 
             logits = model(inputs)
             loss = criterion(logits, targets)
@@ -149,7 +163,7 @@ def test(args, loader_test, model, criterion, writer_test, epoch=0):
             top1.update(prec1[0], inputs.size(0))
             top5.update(prec5[0], inputs.size(0))
 
-        print(f'* Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}')
+        print_logger.info(f'* Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}')
 
     if not args.test_only:
         writer_test.add_scalar('test_top1', top1.avg, epoch)

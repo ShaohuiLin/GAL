@@ -6,6 +6,7 @@ import pdb
 import os
 
 import torch
+import logging
 import functools
 
 class AverageMeter(object):
@@ -54,10 +55,25 @@ class checkpoint():
     
     def save_model(self, state, epoch, is_best):
         save_path = f'{self.ckpt_dir}/model_{epoch}.pt'
-        print('=> Saving model to {}'.format(save_path))
+        # print('=> Saving model to {}'.format(save_path))
         torch.save(state, save_path)
         if is_best:
             shutil.copyfile(save_path, f'{self.ckpt_dir}/model_best.pt')
+
+def get_logger(file_path):
+    logger = logging.getLogger('gal')
+    log_format = '%(asctime)s | %(message)s'
+    formatter = logging.Formatter(log_format, datefmt='%m/%d %I:%M:%S %p')
+    file_handler = logging.FileHandler(file_path)
+    file_handler.setFormatter(formatter)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+    logger.setLevel(logging.INFO)
+
+    return logger
 
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""

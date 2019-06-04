@@ -18,7 +18,7 @@ parser.add_argument(
 parser.add_argument(
     '--data_dir',
     type=str,
-    default='data/',
+    default='/home/yanchenqian/data/cifar10/',
     help='The directory where the input data is stored.')
 parser.add_argument(
     '--job_dir',
@@ -46,6 +46,11 @@ parser.add_argument(
     help='Path to the model to be fine tuned.')
     
 ## Training
+parser.add_argument(
+    '--arch',
+    type=str,
+    default='resnet',
+    help='Architecture of teacher and student')
 parser.add_argument(
     '--student_model',
     type=str,
