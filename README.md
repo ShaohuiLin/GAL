@@ -81,7 +81,12 @@ You can set `--pruned` to reuse the pruned model.
 **Evaluate our ImageNet model**
 
 ```bash
-python test.py --test_only --target_model gal_05 --student_model resnet_50_sparse --dataset imagenet --data_dir $DATA_DIR --eval_batch_size 256 --job_dir ./checkpoints/gal_05.pth.tar
+python test.py \
+--target_model gal_05 \
+--student_model resnet_50_sparse \
+--dataset imagenet --data_dir $DATA_DIR \
+--eval_batch_size 256 --job_dir ./checkpoints/gal_05.pth.tar
+--test_only 
 ```
 
 
