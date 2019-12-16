@@ -41,7 +41,7 @@ In this code, you can run our models on CIFAR10 dataset. The code has been teste
 The scripts of training and fine-tuning are provided  in the `run.sh`, please kindly uncomment the appropriate line in `run.sh` to execute the training and fine-tuning.
 
 ```shell
-sh run.sh
+bash run.sh
 ```
 
 
@@ -78,9 +78,19 @@ You can set `--pruned` to reuse the pruned model.
 
 
 
+**Evaluate our ImageNet model**
+
+```bash
+python test.py --test_only --target_model gal_05 --student_model resnet_50_sparse --dataset imagenet --data_dir $DATA_DIR --eval_batch_size 256 --job_dir ./checkpoints/gal_05.pth.tar
+```
+
+
+
 We also provide our baseline models below. Enjoy your training and testing!
 
-| [ResNet56](https://drive.google.com/open?id=1XHNxyFklGjvzNpTjzlkjpKc61-LLjt5T) | [Vgg-16](https://drive.google.com/open?id=1pnMmLEWAUjVfqFUHanFlps6fSu10UYc1) | [DenseNet-40](https://drive.google.com/open?id=1Ev0SH14lWB5QuyPWLbbUEwGhVJ68tPkb) | [GoogleNet](https://drive.google.com/open?id=1tLZHnycQc4oAJhZ4JNYET_xHwR9mcdZX) |
+Cifar10: | [ResNet56](https://drive.google.com/open?id=1XHNxyFklGjvzNpTjzlkjpKc61-LLjt5T) | [Vgg-16](https://drive.google.com/open?id=1pnMmLEWAUjVfqFUHanFlps6fSu10UYc1) | [DenseNet-40](https://drive.google.com/open?id=1Ev0SH14lWB5QuyPWLbbUEwGhVJ68tPkb) | [GoogleNet](https://drive.google.com/open?id=1tLZHnycQc4oAJhZ4JNYET_xHwR9mcdZX) |
+
+ImageNet: Baidu Wangpan: https://pan.baidu.com/s/1xYP6caveWfN9HY5-KlLH3Q  password:qef0 
 
 
 

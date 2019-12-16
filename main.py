@@ -39,7 +39,7 @@ def main():
 
     # Load teacher model
     ckpt_t = torch.load(args.teacher_dir, map_location=device)
-    
+    # pdb.set_trace()
 
     if args.arch == 'densenet':
         state_dict_t = {}

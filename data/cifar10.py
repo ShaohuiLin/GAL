@@ -6,7 +6,7 @@ class Data:
     def __init__(self, args):
         # pin_memory = False
         # if args.gpu is not None:
-        pin_memory = True
+        pin_memory = False
 
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),

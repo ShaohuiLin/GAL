@@ -52,6 +52,11 @@ parser.add_argument(
     default='resnet',
     help='Architecture of teacher and student')
 parser.add_argument(
+    '--target_model',
+    type=str,
+    default='gal_05',
+    help='The target model.')
+parser.add_argument(
     '--student_model',
     type=str,
     default='resnet_56_sparse',

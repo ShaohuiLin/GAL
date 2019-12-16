@@ -1,12 +1,13 @@
 resnet(){
-PRETRAINED_RESNET=[pre-trained model dir]
+PRETRAINED_RESNET=/hdd1/hdd_B/ycq/pretrained/resnet_56.pt
 MIU=1
 LAMBDA=0.6
 python main.py \
 --teacher_dir $PRETRAINED_RESNET \
 --arch resnet --teacher_model resnet_56 --student_model resnet_56_sparse \
 --lambda $LAMBDA --miu $MIU \
---job_dir 'experiment/resnet/lambda_'$LAMBDA'_miu_'$MIU
+--job_dir 'experiment/resnet/lambda_'$LAMBDA'_miu_'$MIU'_test' --gpus 2 \
+--data_dir /hdd1/hdd_A/data/cifar10
 }
 
 vgg(){
